@@ -174,7 +174,9 @@ class Gemini:
         self.client = None
         if key:
             from google import genai
-            self.client = genai.Client(api_key=key)
+            from google.genai import types
+            # 單次請求最多 90 秒，避免卡住
+            self.client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=90_000))
         if os.environ.get("GEMINI_MODEL"):
             self.models = [os.environ["GEMINI_MODEL"]] + self.models
 
@@ -182,12 +184,19 @@ class Gemini:
     def ok(self) -> bool:
         return self.client is not None
 
-    def ask(self, prompt: str, as_json: bool = False, temperature: float = 0.4) -> str:
+    def ask(self, prompt: str, as_json: bool = False, temperature: float = 0.4,
+            budget_sec: int = 240) -> str:
+        """所有模型、所有重試加總最多 budget_sec 秒，超過就放棄（改用備援）"""
         from google.genai import types
-        last = None
+        last, deadline = None, time.time() + budget_sec
         for m in self.models:
+            if time.time() > deadline:
+                break
             json_mode = as_json
             for attempt in range(3):
+                if time.time() > deadline:
+                    log.warning("  Gemini 超過 %d 秒時間上限，放棄", budget_sec)
+                    break
                 conf = types.GenerateContentConfig(
                     temperature=temperature,
                     response_mime_type="application/json" if json_mode else "text/plain")
@@ -207,7 +216,8 @@ class Gemini:
                     if "404" in msg or "NOT_FOUND" in msg:
                         break                        # 模型不存在 → 直接換下一個
                     # 503 忙碌 / 429 額度：等久一點再試
-                    time.sleep((10, 30, 60)[attempt] if ("503" in msg or "429" in msg) else 3)
+                    wait = (10, 25, 40)[attempt] if ("503" in msg or "429" in msg) else 3
+                    time.sleep(max(0, min(wait, deadline - time.time())))
         raise RuntimeError(f"所有 Gemini 模型都失敗：{last}")
 
 
@@ -407,7 +417,7 @@ def build_script(items: list[Item], cfg: dict, gem: Gemini | None, today: dt.dat
             text = gem.ask(SCRIPT_PROMPT.format(
                 title=cfg["podcast"]["title"], date=f"{today.month}月{today.day}日", weekday=weekday,
                 total=total, sections="\n".join(lines), n=len(CAT_ORDER) + 2, n2=len(CAT_ORDER) + 3,
-                news=json.dumps(news, ensure_ascii=False)), temperature=0.5)
+                news=json.dumps(news, ensure_ascii=False)), temperature=0.5, budget_sec=360)
             text = re.sub(r"[#*_`>|]", "", text).strip()
             if len(text) > total * 0.4:
                 return text
@@ -455,9 +465,12 @@ async def _tts(text: str, path: Path, voice: str, rate: str) -> None:
             for attempt in range(3):
                 try:
                     buf = bytearray()
-                    async for msg in edge_tts.Communicate(chunk, voice=voice, rate=rate).stream():
-                        if msg["type"] == "audio":
-                            buf += msg["data"]
+
+                    async def _run():
+                        async for msg in edge_tts.Communicate(chunk, voice=voice, rate=rate).stream():
+                            if msg["type"] == "audio":
+                                buf.extend(msg["data"])
+                    await asyncio.wait_for(_run(), timeout=180)   # 每段最多 3 分鐘
                     if not buf:
                         raise RuntimeError("沒有收到音訊")
                     f.write(buf)
