@@ -184,21 +184,30 @@ class Gemini:
 
     def ask(self, prompt: str, as_json: bool = False, temperature: float = 0.4) -> str:
         from google.genai import types
-        conf = types.GenerateContentConfig(
-            temperature=temperature,
-            response_mime_type="application/json" if as_json else "text/plain")
         last = None
         for m in self.models:
-            for attempt in range(2):
+            json_mode = as_json
+            for attempt in range(3):
+                conf = types.GenerateContentConfig(
+                    temperature=temperature,
+                    response_mime_type="application/json" if json_mode else "text/plain")
                 try:
                     r = self.client.models.generate_content(model=m, contents=prompt, config=conf)
                     if r.text:
                         log.info("  Gemini 使用模型 %s", m)
                         return r.text
                 except Exception as e:  # noqa: BLE001
-                    last = e
-                    log.warning("  Gemini %s 失敗（第 %d 次）：%s", m, attempt + 1, str(e)[:200])
-                    time.sleep(3 * (attempt + 1))
+                    last, msg = e, str(e)
+                    log.warning("  Gemini %s 失敗（第 %d 次）：%s", m, attempt + 1, msg[:160])
+                    if "JSON mode" in msg:          # 此模型不支援 JSON 模式 → 改純文字再試
+                        json_mode = False
+                        continue
+                    if "API key" in msg or "PERMISSION" in msg:
+                        raise RuntimeError(f"Gemini 金鑰有問題：{msg[:200]}") from e
+                    if "404" in msg or "NOT_FOUND" in msg:
+                        break                        # 模型不存在 → 直接換下一個
+                    # 503 忙碌 / 429 額度：等久一點再試
+                    time.sleep((10, 30, 60)[attempt] if ("503" in msg or "429" in msg) else 3)
         raise RuntimeError(f"所有 Gemini 模型都失敗：{last}")
 
 

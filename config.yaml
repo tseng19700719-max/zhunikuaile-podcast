@@ -25,7 +25,7 @@ tts:
 
 gemini:
   # 依序嘗試，前一個失敗就換下一個
-  models: ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-2.5-flash"]
+  models: ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"]
 
 # 業務負責區域（選填）：例如 ["桃園", "中壢", "青埔"]
 # 有填的話會多抓當地房市新聞，並優先排序
