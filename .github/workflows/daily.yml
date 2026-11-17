@@ -1,0 +1,55 @@
+name: 住你快樂podcast 每日更新
+
+on:
+  schedule:
+    # GitHub 用 UTC：22:17 UTC = 台灣 06:17（避開整點排隊，約 06:30 前完成）
+    - cron: "17 22 * * *"
+  workflow_dispatch: {}        # 可在 Actions 頁面手動執行
+
+permissions:
+  contents: write
+
+concurrency:
+  group: podcast
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 取回已發布的集數
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: prev
+        continue-on-error: true   # 第一次執行還沒有 gh-pages，略過
+
+      - name: 準備網站資料夾
+        run: |
+          mkdir -p site
+          if [ -d prev ]; then rsync -a --exclude .git prev/ site/; fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 產生今日節目
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python podcast.py --site site
+
+      - name: 發布到 GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./site
+          force_orphan: true      # gh-pages 只保留一個 commit，repo 不會越來越大
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com

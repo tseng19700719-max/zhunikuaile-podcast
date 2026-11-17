@@ -1,0 +1,95 @@
+# ============================================================
+# 住你快樂podcast 設定檔
+# 一般只需要改這個檔案，不用動程式碼
+# ============================================================
+
+podcast:
+  title: "住你快樂podcast"
+  author: "住你快樂podcast"
+  description: "每天早上 15 分鐘，掌握房地產營建、總體經濟、政府政策與銀行政策重點。"
+  language: "zh-tw"
+  # 留空 = 自動用 https://<GitHub帳號>.github.io/<repo名稱>
+  base_url: ""
+  keep_episodes: 14          # 保留最近幾集（舊的自動刪除，避免容量變大）
+  timezone: "Asia/Taipei"
+
+episode:
+  total_items: 30            # 每集精選新聞則數（依下方 share 比例分配）
+  target_chars: 4500         # 講稿總字數，約 15–18 分鐘
+  window_hours: 24           # 抓過去幾小時的新聞
+  max_window_hours: 72       # 新聞量不夠時自動放寬到這個時數（週末、連假）
+
+tts:
+  voice: "zh-TW-HsiaoChenNeural"   # 女聲；男聲可改 zh-TW-YunJheNeural
+  rate: "+8%"
+
+gemini:
+  # 依序嘗試，前一個失敗就換下一個
+  models: ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-2.5-flash"]
+
+# 業務負責區域（選填）：例如 ["桃園", "中壢", "青埔"]
+# 有填的話會多抓當地房市新聞，並優先排序
+local_keywords: []
+
+# ------------------------------------------------------------
+# 內容配比：share 加總 = 100
+# queries = Google 新聞關鍵字（空白 = AND，OR 要大寫）
+# feeds   = 直接訂閱的新聞 RSS
+# ------------------------------------------------------------
+categories:
+  realestate:
+    name: "房地產營建"
+    share: 60
+    queries:
+      - "房市"
+      - "房價"
+      - "預售屋"
+      - "建商 推案"
+      - "營建股 OR 營建類股"
+      - "建案 銷售"
+      - "實價登錄"
+      - "買賣移轉棟數 OR 房市交易量"
+      - "土地標售 OR 地上權"
+      - "都更 OR 危老"
+      - "營造 建材 OR 營建成本"
+      - "租屋市場 OR 房租"
+    feeds:
+      - "https://money.udn.com/rssfeed/news/1001/5621?ch=money"   # 經濟日報 房市
+
+  macro:
+    name: "總體經濟"
+    share: 20
+    queries:
+      - "台灣 經濟成長率 OR GDP"
+      - "CPI 通膨 主計總處"
+      - "聯準會 利率"
+      - "新台幣 匯率"
+      - "出口 財政部 OR 外銷訂單"
+      - "景氣燈號 OR 國發會 景氣"
+    feeds:
+      - "https://feeds.feedburner.com/rsscna/finance"            # 中央社 財經
+      - "https://news.ltn.com.tw/rss/business.xml"               # 自由時報 財經
+
+  gov:
+    name: "政府政策"
+    share: 10
+    queries:
+      - "內政部 房地產 政策"
+      - "囤房稅 OR 房地合一稅"
+      - "平均地權條例"
+      - "社會住宅 OR 包租代管"
+      - "不動產經紀業 OR 房仲 法規"
+      - "都市計畫 OR 重劃區"
+    feeds: []
+
+  bank:
+    name: "銀行政策"
+    share: 10
+    queries:
+      - "央行 理監事會"
+      - "選擇性信用管制"
+      - "房貸利率 OR 房貸成數"
+      - "銀行法72-2 OR 不動產放款"
+      - "新青安 貸款"
+      - "金管會 房貸"
+    feeds: []
