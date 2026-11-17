@@ -235,7 +235,9 @@ CLASSIFY_PROMPT = """你是台灣房仲業務的新聞編輯。以下是今天�
 - bank 銀行政策：央行利率與信用管制、房貸利率與成數、銀行不動產放款、新青安、金管會房貸措施
 - drop：與以上無關、社會新聞、個股（非營建）漲跌、業配或像建案廣告的報導、重複內容
 
-重要性（站在房仲營業員角度）：5=直接影響買賣決策或成交量；4=重要趨勢；3=值得知道；2=次要；1=幾乎無關
+重要性（站在台灣房仲營業員角度）：5=直接影響買賣決策或成交量；4=重要趨勢；3=值得知道；2=次要；1=幾乎無關
+- 以台灣新聞為主：國外房市、國外企業新聞，除非明確影響台灣房市或利率，重要性最多 1，或直接 drop
+- 總體經濟的美國聯準會、美元匯率可保留（影響台灣利率與資金）
 {local_rule}
 新聞清單：
 {items}
@@ -251,6 +253,10 @@ EXTRA_TERMS = {
             "包租代管", "都市計畫", "修法", "政策", "條例"],
     "bank": ["央行", "理監事", "信用管制", "房貸", "成數", "72-2", "放款", "新青安", "金管會", "銀行"],
 }
+
+
+FOREIGN = ["美國", "灣區", "加州", "紐約", "倫敦", "日本", "東京", "香港", "中國大陸", "大陸房", "新加坡",
+           "杜拜", "Home Depot", "【即時新聞】"]
 
 
 def category_terms(cfg: dict) -> dict:
@@ -292,6 +298,8 @@ def select(items: list[Item], cfg: dict, gem: Gemini | None) -> list[Item]:
             it.category = best if hits[best] else it.hint
             it.importance = (1 + min(hits[best], 2) + int(any(k in it.title for k in local))
                              if hits[best] else 0)
+            if it.importance and best != "macro" and any(f in it.title for f in FOREIGN):
+                it.importance = 0   # 國外房市／企業新聞，與台灣房仲無關
 
     pool = {k: sorted([i for i in items if i.category == k and i.importance > 0],
                       key=lambda x: (-x.importance, -x.published)) for k in CAT_ORDER}
@@ -370,6 +378,8 @@ SCRIPT_PROMPT = """你是 Podcast「{title}」的主持人，聽眾是台灣房�
 - 繁體中文、台灣用語，像專業主持人在說話；不要用條列符號、表情符號、markdown、標題符號
 - 段落轉換時用口語串場，例如「接下來看總體經濟」
 - 數字、日期、百分比、金額只能照新聞原文，不可自行推算或編造；不確定就不要講數字
+- 數字若看起來不合理或前後矛盾（例如房價只有幾萬元），就不要引用該數字
+- 國外新聞除非影響台灣，否則略過不講
 - 每則新聞提到來源媒體（例如「根據經濟日報報導」）
 - 房地產營建段落：重要新聞後加一句「對業務的意義」，例如對買方、屋主或成交量的可能影響，用「可能」「值得留意」等保留語氣
 - 同一事件多家報導時合併成一則講
