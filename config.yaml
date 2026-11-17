@@ -54,7 +54,7 @@ categories:
       - "營造 建材 OR 營建成本"
       - "租屋市場 OR 房租"
     feeds:
-      - "https://money.udn.com/rssfeed/news/1001/5621?ch=money"   # 經濟日報 房市
+      - "https://www.ctee.com.tw/rss_web/livenews/house"         # 工商時報 房產
 
   macro:
     name: "總體經濟"
@@ -69,6 +69,8 @@ categories:
     feeds:
       - "https://feeds.feedburner.com/rsscna/finance"            # 中央社 財經
       - "https://news.ltn.com.tw/rss/business.xml"               # 自由時報 財經
+      - "https://money.udn.com/rssfeed/news/1001/5588?ch=money"  # 經濟日報 要聞
+      - "https://tw.news.yahoo.com/rss/finance"                  # Yahoo 財經
 
   gov:
     name: "政府政策"

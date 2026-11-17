@@ -233,6 +233,28 @@ CLASSIFY_PROMPT = """你是台灣房仲業務的新聞編輯。以下是今天�
 """
 
 
+EXTRA_TERMS = {
+    "realestate": ["房", "建案", "建商", "營建", "營造", "土地", "地價", "都更", "危老", "租金", "預售", "中古屋",
+                   "實價", "移轉", "豪宅", "住宅", "重劃", "地上權", "建材"],
+    "macro": ["GDP", "經濟", "通膨", "CPI", "聯準會", "Fed", "利率", "匯率", "新台幣", "美元", "出口", "景氣",
+              "外銷訂單", "主計", "國發會", "降息", "升息"],
+    "gov": ["內政部", "財政部", "立法院", "政院", "囤房稅", "房地合一", "平均地權", "社宅", "社會住宅",
+            "包租代管", "都市計畫", "修法", "政策", "條例"],
+    "bank": ["央行", "理監事", "信用管制", "房貸", "成數", "72-2", "放款", "新青安", "金管會", "銀行"],
+}
+
+
+def category_terms(cfg: dict) -> dict:
+    """關鍵字：config 的 queries 拆字 + 內建詞庫"""
+    out = {}
+    for k in CAT_ORDER:
+        words = set(EXTRA_TERMS.get(k, []))
+        for q in cfg["categories"][k].get("queries") or []:
+            words |= {w for w in re.split(r"\s+|\bOR\b", q) if len(w) >= 2 and w != "OR"}
+        out[k] = sorted(words, key=len, reverse=True)
+    return out
+
+
 def select(items: list[Item], cfg: dict, gem: Gemini | None) -> list[Item]:
     q = quotas(cfg)
     local = cfg.get("local_keywords") or []
@@ -253,12 +275,16 @@ def select(items: list[Item], cfg: dict, gem: Gemini | None) -> list[Item]:
                     it.importance = int(r.get("importance", 2))
         except Exception as e:  # noqa: BLE001
             log.warning("Gemini 分類失敗，改用關鍵字分類：%s", e)
-    for it in items:  # 沒有 AI 結果時的備援
+    terms = category_terms(cfg)
+    for it in items:  # 沒有 AI 結果時的備援：標題含該類關鍵字才算相關
         if not it.category:
-            it.category = it.hint
-            it.importance = 3 + int(any(k in it.title for k in local))
+            hits = {k: sum(t in it.title for t in terms[k]) for k in CAT_ORDER}
+            best = max(CAT_ORDER, key=lambda k: (hits[k], k == it.hint))
+            it.category = best if hits[best] else it.hint
+            it.importance = (1 + min(hits[best], 2) + int(any(k in it.title for k in local))
+                             if hits[best] else 0)
 
-    pool = {k: sorted([i for i in items if i.category == k],
+    pool = {k: sorted([i for i in items if i.category == k and i.importance > 0],
                       key=lambda x: (-x.importance, -x.published)) for k in CAT_ORDER}
     picked = {k: pool[k][: q[k]] for k in CAT_ORDER}
     # 某類不足時，空出的名額依序補給 房地產營建 → 總經
@@ -288,8 +314,8 @@ def _resolve_gnews(url: str) -> str:
         return url
     try:
         from googlenewsdecoder import gnewsdecoder
-        r = gnewsdecoder(url, interval=0.5)
-        if r.get("status"):
+        r = gnewsdecoder(url, interval=0.3)
+        if (r.get("status") or r.get("success")) and r.get("decoded_url"):
             return r["decoded_url"]
     except Exception as e:  # noqa: BLE001
         log.debug("Google 新聞網址解碼失敗：%s", e)
